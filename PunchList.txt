@@ -1,0 +1,470 @@
+Jitsi Video Conferencing
+
+https://jitsi.org/
+
+Github main: https://github.com/jitsi
+
+Installation instructions:  https://github.com/jitsi/jitsi-meet/blob/master/doc/manual-install.md
+
+Components:
+
+  * prosody - an XMPP/Jabber server (written in Lua)
+
+  * Nginx - an http server
+
+  * [[https://github.com/jitsi/jitsi-videobridge|Jitsi Video Bridge]] -  an XMPP server component that allows for multiuser video communication.
+
+  * [[https://github.com/jitsi/jicofo|Jitsi Conference Focus]] - Conference focus is mandatory component of Jitsi Meet conferencing system next to the videobridge. It is responsible for managing media sessions between each of the participants and the videobridge.
+
+  * [[https://github.com/jitsi/jitsi-meet|Jitsi Meet]] - Jitsi Meet is an open-source (Apache) WebRTC JavaScript application that uses Jitsi Videobridge to provide high quality, secure and scalable video conferences.
+
+====== Gentoo Installation ======
+===== net-im/prosody =====
+
+Well do the following:
+  - Install prosody using Gentoo's portage
+  - Configure prosody
+  - generate certificates
+  - create a user
+  - restart the prosody server
+
+
+==== install prosody ====
+We want to have Sqlite and PostgreSQL, so add the flags:
+<code>
+       cat >/etc/portage/package.use/prosody
+       net-im/prosody postgres sqlite
+       [Ctrol-D]
+       
+janus /home/jlpoole # equery uses net-im/prosody
+python-exec: Invalid impl in /etc/python-exec/python-exec.conf: python3.5
+[ Legend : U - final flag setting for installation]
+[        : I - package is installed with flag     ]
+[ Colors : set, unset                             ]
+ * Found these USE flags for net-im/prosody-0.11.2-r1:
+ U I
+ + + ipv6     : Add support for IP version 6
+ - - jit      : Use LuaJIT instead of vanilla Lua
+ - - libevent : Use libevent for event handling
+ - - libressl : Use dev-libs/libressl instead of dev-libs/openssl when
+                applicable (see also the ssl useflag)
+ - - mysql    : Add mySQL Database support
+ + + postgres : Add support for the postgresql database
+ + + sqlite   : Add support for sqlite - embedded sql database
+ + + ssl      : Add support for SSL/TLS connections (Secure Socket Layer /
+                Transport Layer Security)
+ - - test     : Enable dependencies and/or preparations necessary to run tests
+                (usually controlled by FEATURES=test but can be toggled
+                independently)
+ + + zlib     : Support for compressing XMPP streams with mod_compression
+janus /home/jlpoole # 
+
+</code>
+<code>emerge net-im/prosody</code>
+
+==== configure prosody ====
+In Gentoo, the configuration file we edit is /etc/jabber/prosody.cfg.lua.  Also, Gentoo has the certificates stored under /etc/jabber/certs whereas the jitsi example uses /var/lib/prosody.
+
+=== add your domain virtual host section ===
+<code>--
+-- start jlpoole 4/7/2020
+--
+
+-- used template from
+-- https://github.com/jitsi/jitsi-meet/blob/master/doc/manual-install.md
+-- and replaced example.com with salemdata.net
+-- changed path from /var/lib/prosody to /etc/jabber/certs
+--
+VirtualHost "jitsi.salemdata.net"
+    authentication = "anonymous"
+    ssl = {
+        key = "/etc/jabber/certs/jitsi.salemdata.net.key";
+        certificate = "/etc/jabber/certs/jitsi.salemdata.net.crt";
+    }
+    modules_enabled = {
+        "bosh";
+        "pubsub";
+    }
+    c2s_require_encryption = false
+
+--
+-- end jlpoole 4/7/2020
+--
+</code>
+
+=== add domain with authentication for conference focus use ===
+
+<code>VirtualHost "auth.jitsi.salemdata.net"
+    ssl = {
+        key = "/etc/jabber/certs/auth.jitsi.salemdata.net.key";
+        certificate = "/etc/jabber/certs//auth.jitsi.salemdata.net.crt";
+    }
+    authentication = "internal_plain"
+</code>
+
+=== add focus user to server admins </code> ===
+<code>admins = { "focus@auth.jitsi.salemdata.net" }</code>
+=== configure components ===
+<code>
+Component "conference.jitsi.salemdata.net" "muc"
+Component "jitsi-videobridge.jitsi.salemdata.net"
+    component_secret = "MYSECRETSALEM1"
+Component "focus.jitsi.salemdata.net"
+    component_secret = "MYSECRETSALEM2"
+</code>
+==== link for the added configuration ====
+ Not sure this step is necessary given the above and being in a Gentoo installation.
+
+==== Generate certificates for the domain====
+
+<code>prosodyctl cert generate jitsi.salemdata.net
+prosodyctl cert generate auth.jitsi.salemdata.net
+</code>
+<code>janus /home/jlpoole # prosodyctl cert generate jitsi.salemdata.net
+Choose key size (2048):
+Generating RSA private key, 2048 bit long modulus (2 primes)
+.......................+++++
+........................+++++
+e is 65537 (0x010001)
+Key written to //var/spool/jabber/jitsi.salemdata.net.key
+Please provide details to include in the certificate config file.
+Leave the field empty to use the default value or '.' to exclude the field.
+countryName (GB): US
+localityName (The Internet): Oregon
+organizationName (Your Organisation): Salem Data
+organizationalUnitName (XMPP Department): XMPP Dept
+commonName (jitsi.salemdata.net):
+emailAddress (xmpp@jitsi.salemdata.net):
+
+Config written to //var/spool/jabber/jitsi.salemdata.net.cnf
+Certificate written to //var/spool/jabber/jitsi.salemdata.net.crt
+
+janus /home/jlpoole # prosodyctl cert generate auth.jitsi.salemdata.net
+Choose key size (2048):
+Generating RSA private key, 2048 bit long modulus (2 primes)
+..........................................................+++++
+.........+++++
+e is 65537 (0x010001)
+Key written to //var/spool/jabber/auth.jitsi.salemdata.net.key
+Please provide details to include in the certificate config file.
+Leave the field empty to use the default value or '.' to exclude the field.
+countryName (GB): US
+localityName (The Internet): Oregon
+organizationName (Your Organisation): Salem Data
+organizationalUnitName (XMPP Department): XMPP Dept
+commonName (auth.jitsi.salemdata.net):
+emailAddress (xmpp@auth.jitsi.salemdata.net):
+
+Config written to //var/spool/jabber/auth.jitsi.salemdata.net.cnf
+Certificate written to //var/spool/jabber/auth.jitsi.salemdata.net.crt
+
+janus /home/jlpoole #
+</code>
+=== Create conference focus user ====
+<code>prosodyctl register focus auth.jitsi.salemdata.net MYSECRETSALEM3
+</code>
+
+
+<code> Actual:
+janus /home/jlpoole # prosodyctl register focus auth.jitsi.salemdata.net MYSECRETSALEM3
+janus /home/jlpoole #
+</code>
+
+==== Restart prosody XMPP server with the new config ====
+<code>
+/etc/init.d/prosody restart
+</code>
+<code>Actual:
+janus /home/jlpoole # /etc/init.d/prosody restart
+ * Caching service dependencies ...                                       [ ok ]
+ * Starting Prosody XMPP Server ...
+Started                                                                   [ ok ]
+janus /home/jlpoole #
+</code>
+
+===== Install nginx =====
+
+Here's the default listing for nginx.  There's a lot of options, so we need to make sure that the Gentoo options needed for the jitsi system are engaged.
+
+
+<code>* www-servers/nginx
+     Available versions:
+     (0)    1.16.1-r1^t
+     (mainline) ~1.17.9-r1^t
+       {aio debug +http +http-cache +http2 +ipv6 libatomic libressl luajit +pcre pcre-jit rtmp selinux ssl threads vim-syntax NGINX_MODULES_HTTP="+access addition +auth_basic auth_ldap auth_pam auth_request +autoindex brotli +browser cache_purge +charset dav dav_ext degradation echo +empty_gif fancyindex +fastcgi flv +geo geoip geoip2 +grpc gunzip +gzip gzip_static headers_more image_filter javascript +limit_conn +limit_req lua +map memc +memcached metrics +mirror mogilefs mp4 naxsi perl +proxy push_stream random_index realip +referer +rewrite +scgi secure_link security slice slowfs_cache spdy +split_clients +ssi sticky stub_status sub upload_progress upstream_check +upstream_hash +upstream_ip_hash +upstream_keepalive +upstream_least_conn +upstream_zone +userid +uwsgi vhost_traffic_status xslt" NGINX_MODULES_MAIL="imap pop3 smtp" NGINX_MODULES_STREAM="access geo geoip geoip2 javascript limit_conn map realip return split_clients ssl_preread upstream_hash upstream_least_conn upstream_zone" USERLAND="GNU"}
+     Homepage:            https://nginx.org
+     Description:         Robust, small and high performance http and reverse proxy server
+</code>
+
+<code>
+ emerge   www-servers/nginx
+...
+
+* Messages for package www-servers/nginx-1.16.1-r1:
+ * Log file: /var/log/portage/www-servers:nginx-1.16.1-r1:20200416-140803.log
+
+ * Adding group 'nginx' to your system ...
+ *  - Groupid: next available
+ * Adding user 'nginx' to your system ...
+ *  - Userid: 998
+ *  - Shell: /sbin/nologin
+ *  - Home: /var/lib/nginx
+ *  - Groups: nginx
+ *  - GECOS: added by portage for nginx
+ *  - Creating /var/lib/nginx in /
+ *
+ * This nginx installation comes with a mitigation for the HTTPoxy
+ * vulnerability for FastCGI, SCGI and uWSGI applications by setting
+ * the HTTP_PROXY parameter to an empty string per default when you
+ * are sourcing one of the default
+ *
+ *   - 'fastcgi_params' or 'fastcgi.conf'
+ *   - 'scgi_params'
+ *   - 'uwsgi_params'
+ *
+ * files in your server block(s).
+ *
+ * If this is causing any problems for you make sure that you are sourcing the
+ * default parameters _before_ you set your own values.
+ * If you are relying on user-supplied proxy values you have to remove the
+ * correlating lines from the file(s) mentioned above.
+ *
+>>> Auto-cleaning packages...
+
+>>> No outdated packages were found on your system.
+
+ * GNU info directory index is up-to-date.
+jitsi /etc/portage/package.use #
+</code>
+
+Make directories ''/etc/nginx/sites-available'' and ''/etc/nginx/sites-enabled''.  
+     
+     mkdir /etc/nginx/sites-available
+     mkdir /etc/nginx/sites-enabled
+     
+Create a new file ''/etc/nginx/sites-available/jitsi.salemdata.net'' and insert:
+
+<code>server_names_hash_bucket_size 64;
+
+server {
+    listen 0.0.0.0:443 ssl http2;
+    listen [::]:443 ssl http2;
+    # tls configuration that is not covered in this guide
+    # we recommend the use of https://certbot.eff.org/
+    server_name jitsi.salemdata.net;
+    # set the root
+    root /srv/jitsi-meet;
+    index index.html;
+    location ~ ^/([a-zA-Z0-9=\?]+)$ {
+        rewrite ^/(.*)$ / break;
+    }
+    location / {
+        ssi on;
+    }
+    # BOSH, Bidirectional-streams Over Synchronous HTTP
+    # https://en.wikipedia.org/wiki/BOSH_(protocol)
+    location /http-bind {
+        proxy_pass      http://localhost:5280/http-bind;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Host $http_host;
+    }
+    # external_api.js must be accessible from the root of the
+    # installation for the electron version of Jitsi Meet to work
+    # https://github.com/jitsi/jitsi-meet-electron
+    location /external_api.js {
+        alias /srv/jitsi-meet/libs/external_api.min.js;
+    }
+
+</code>
+Create a link to the file above in the sites-enabled directory:
+
+     ln -s /etc/nginx/sites-available/jitsi.salemdata.net /etc/nginx/sites-enabled/jitsi.salemdata.net
+     
+     
+==== Install Jitsi Videobridge ====
+visit https://download.jitsi.org/jitsi-videobridge/linux/ to determine the latest build.  Then we'll download and install under the /etc/nginx directory:
+
+     cd /etc/nginx
+     wget https://download.jitsi.org/jitsi-videobridge/linux/jitsi-videobridge-linux-x64-1132.zip
+     unzip jitsi-videobridge-linux-x64-1132.zip
+     
+Install JRE (Java Development Kit)
+
+Note: the jitsi project recommend installing OpenJRE for this step.  But then in the following step, "Install Jitsi Conference Focus (jicofo)", it recommends intalling a JDK. The JDK already has a run time environment, so just install the JDK.  Gentoo's OpenJDK comes in a regular compile-it version, or a pre-built compiled "-bin" version.  Use the prebuilt and save some time and avoid installing tools only needed to compile the Open JDK. 
+
+Install Jitsi Conference Focus (jicofo)
+
+      emerge dev-java/openjdk-jdk-bin
+      emerge dev-java/maven-bin
+      
+      emerge dev-vcs/git
+
+      cd /usr/local/src
+      git clone https://github.com/jitsi/jicofo.git
+      
+Create user and group
+
+Derived from https://github.com/jitsi/jitsi-videobridge/blob/master/debian/postinst  Debian uses /usr/share, Gentoo uses /var/lib for home directory of processes.    
+  
+Create group:
+     groupadd jitsi
+     
+Create user:
+     useradd -r -g jitsi --shell /bin/bash --create-home -d /var/lib/jitsi-videobridge jvb
+     
+Create the configuration area:
+   
+     mkdir -p /etc/jitsi/videobridge/config
+     
+Create a configuration file:
+
+     nano /etc/jitsi/videobridge/sip-communicator.properties
+     
+and insert:
+   JAVA_SYS_PROPS=\"-Dnet.java.sip.communicator.SC_HOME_DIR_LOCATION=/etc/jitsi\
+   -Dnet.java.sip.communicator.SC_HOME_DIR_NAME=videobridge\
+   -Dnet.java.sip.communicator.SC_LOG_DIR_LOCATION=/var/log/jitsi\
+   -Djava.util.logging.config.file=/etc/jitsi/videobridge/logging.properties\"   
+
+Create operating directories:
+
+    mkdir -p /var/log/jitsi
+    chown jvb:jitsi /var/log/jitsi
+    chmod 770 /var/log/jitsi
+    
+    
+Create an init script:
+
+    nano /etc/init.d/jitsi-videobridge
+    
+<code>#! /bin/sh
+#
+# INIT script for Jitsi Videobridge
+# Version: 1.0  01-May-2014  yasen@bluejimp.com
+#
+### BEGIN INIT INFO
+# Provides:          jitsi-videobridge
+# Required-Start:    $local_fs $remote_fs
+# Required-Stop:     $local_fs $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Jitsi Videobridge
+# Description:       WebRTC compatible Selective Forwarding Unit (SFU)
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+# Include videobridge defaults if available
+if [ -f /etc/jitsi/videobridge/config ]; then
+    . /etc/jitsi/videobridge/config
+fi
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+DAEMON=/var/lib/jitsi-videobridge/jvb.sh
+NAME=jvb
+USER=jvb
+# A tmpfs backed directory just for the JVB process. This is introduced
+# to hold packet arrival times, but it may be otherwise useful in the future.
+TMPPATH=/var/run/jitsi-videobridge
+PIDFILE=/var/run/jitsi-videobridge.pid
+LOGFILE=/var/log/jitsi/jvb.log
+DESC=jitsi-videobridge
+
+if [ ! -d "$TMPPATH" ]; then
+    mkdir "$TMPPATH"
+    chown $USER:adm "$TMPPATH"
+fi
+
+if [ ! $JVB_HOST ]; then
+    JVB_HOST=localhost
+fi
+DAEMON_OPTS=" --host=$JVB_HOST --domain=$JVB_HOSTNAME --port=$JVB_PORT --secret=$JVB_SECRET $JVB_OPTS"
+
+if [ ! -x $DAEMON ] ;then
+  echo "Daemon not executable: $DAEMON"
+  exit 1
+fi
+
+set -e
+
+stop() {
+    if [ -f $PIDFILE ]; then
+        PID=$(cat $PIDFILE)
+    fi
+    echo -n "Stopping $DESC: "
+    if [ $PID ]; then
+        kill $PID || true
+        rm $PIDFILE || true
+        echo "$NAME stopped."
+    else
+        echo "$NAME doesn't seem to be running."
+    fi
+}
+
+start() {
+    if [ -f $PIDFILE ]; then
+        echo "$DESC seems to be already running, we found pidfile $PIDFILE."
+        exit 1
+    fi
+    echo -n "Starting $DESC: "
+    DAEMON_START_CMD="JAVA_SYS_PROPS=\"$JAVA_SYS_PROPS\" exec $DAEMON $DAEMON_OPTS < /dev/null >> $LOGFILE 2>&1"
+    AUTHBIND_CMD=""
+    if [ "$AUTHBIND" = "yes" ]; then
+        AUTHBIND_CMD="/usr/bin/authbind --deep /bin/bash -c "
+        DAEMON_START_CMD="'$DAEMON_START_CMD'"
+    fi
+    start-stop-daemon --start --quiet --background --chuid $USER --make-pidfile --pidfile $PIDFILE \
+        --exec /bin/bash -- -c "$AUTHBIND_CMD $DAEMON_START_CMD"
+    echo "$NAME started."
+}
+
+reload() {
+    echo 'Not yet implemented.'
+}
+
+status() {
+    status_of_proc -p $PIDFILE java "$NAME" && exit 0 || exit $?
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  restart)
+    stop
+    start
+    ;;
+  reload)
+    reload
+    ;;
+  force-reload)
+    reload
+    ;;
+  status)
+    status
+    ;;
+  *)
+    N=/etc/init.d/$NAME
+    echo "Usage: $N {start|stop|restart|reload|status}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
+</code> 
+
+Create sip file:
+<code>
+
+mkdir -p /var/lib/jitsi-videobridge/.sip-communicator
+cat > /var/lib/jitsi-videobridge/.sip-communicator/sip-communicator.properties << EOF
+org.jitsi.impl.neomedia.transform.srtp.SRTPCryptoContext.checkReplay=false
+# The videobridge uses 443 by default with 4443 as a fallback, but since we're already
+# running nginx on 443 in this example doc, we specify 4443 manually to avoid a race condition
+org.jitsi.videobridge.TCP_HARVESTER_PORT=4443
+EOF
+chown jvb:jitsi /var/lib/jitsi-videobridge/.sip-communicator/sip-communicator.properties 
+</code>
