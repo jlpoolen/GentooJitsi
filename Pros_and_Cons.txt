@@ -1,0 +1,11 @@
+The following identifies pros and cons for running a Jitsi server
+
+Pros
+- complete privacy and control
+- open source
+
+Cons
+- The recommended nginx server needs port 443, so you have to use a server which does not already utilize port 443
+- must use Node Package Manager, aka 'npm'.  This is a security risk
+- probably need to dedicate a server, e.g. a Virtual Machine on a Xen platform, just for this service
+- project is Debian biased, so installation requires modification for Gentoo 
